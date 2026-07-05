@@ -2048,9 +2048,6 @@ static void TGUpdatePanel(void) {
         if ([delegate respondsToSelector:@selector(application:openURL:options:)]) {
             handled = [delegate application:app openURL:url options:@{}];
         }
-        if (!handled && [delegate respondsToSelector:@selector(application:openURL:sourceApplication:annotation:)]) {
-            handled = [delegate application:app openURL:url sourceApplication:nil annotation:nil];
-        }
         if (!handled) {
             // Fallback: system openURL (may open another Telegram client).
             [app openURL:url options:@{} completionHandler:nil];
