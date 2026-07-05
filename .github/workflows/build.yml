@@ -1,0 +1,118 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write   # needed by softprops/action-gh-release to create the release
+
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      # ── Theos toolchain + iPhoneOS16.5 SDK ──────────────────────────────
+      # Mirrors the proven install pattern from chelaxian/ios.ratu.sh
+      # (.github/workflows/build-offloader-prefs.yml).
+      - name: Install Theos
+        run: |
+          git clone --recursive https://github.com/theos/theos.git "$HOME/theos"
+          brew install ldid make
+          mkdir -p "$HOME/theos/sdks"
+          git clone --depth 1 --filter=blob:none --sparse https://github.com/theos/sdks.git "$RUNNER_TEMP/theos-sdks"
+          git -C "$RUNNER_TEMP/theos-sdks" sparse-checkout set iPhoneOS16.5.sdk
+          cp -R "$RUNNER_TEMP/theos-sdks/iPhoneOS16.5.sdk" "$HOME/theos/sdks/"
+
+      # ── Version (read from control) ─────────────────────────────────────
+      - name: Read version
+        id: ver
+        run: |
+          v="$(awk '/^Version:/{print $2; exit}' control)"
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+          echo ">> building TGProxyRotation $v"
+
+      # ── Target 1: RootHide / rootless deb ───────────────────────────────
+      # Mach-O is built as rootless arm64; the `after-stage` rule drops a
+      # `.roothidepatch` sentinel next to the dylib so RootHide Bootstrap's
+      # on-device patcher re-chunks it for arm64e/PAC at install time.
+      # Rootless installers simply ignore the sentinel. One deb, both worlds.
+      - name: Build deb (Tweak.x)
+        env:
+          THEOS: ${{ github.workspace }}/../theos
+        run: |
+          export THEOS="$HOME/theos"
+          gmake clean package FINALPACKAGE=1
+
+      - name: Locate deb
+        id: deb
+        run: |
+          deb="$(ls packages/com.ratush.tgproxyrotation_*_iphoneos-arm64e.deb | head -1)"
+          echo "path=$deb" >> "$GITHUB_OUTPUT"
+          cp "$deb" "TGProxyRotation-${{ steps.ver.outputs.version }}.deb"
+          echo ">> deb: $deb ($(wc -c < "$deb") bytes)"
+
+      # ── Target 2: Sideload dylib (no MobileSubstrate dependency) ────────
+      - name: Build sideload dylib (Tweak.dylib.m)
+        env:
+          THEOS: ${{ github.workspace }}/../theos
+        run: |
+          export THEOS="$HOME/theos"
+          gmake -f Makefile.dylib clean
+          gmake -f Makefile.dylib FINALPACKAGE=1
+
+      - name: Locate dylib
+        id: dylib
+        run: |
+          src=".theos/obj/TGProxyRotation.dylib"
+          [ -f "$src" ] || src="$(find .theos/obj -name 'TGProxyRotation.dylib' | head -1)"
+          out="TGProxyRotation-${{ steps.ver.outputs.version }}.dylib"
+          cp "$src" "$out"
+          echo "path=$out" >> "$GITHUB_OUTPUT"
+          echo ">> dylib: $out ($(wc -c < "$out") bytes)"
+
+      # ── Hash both artifacts for the release notes ───────────────────────
+      - name: Hash artifacts
+        run: |
+          shasum -a 256 \
+            "TGProxyRotation-${{ steps.ver.outputs.version }}.deb" \
+            "TGProxyRotation-${{ steps.ver.outputs.version }}.dylib" \
+            | tee SHA256SUMS.txt
+
+      # ── Always upload artifacts (PR/push runs too) ──────────────────────
+      - uses: actions/upload-artifact@v4
+        with:
+          name: TGProxyRotation-${{ steps.ver.outputs.version }}
+          path: |
+            TGProxyRotation-${{ steps.ver.outputs.version }}.deb
+            TGProxyRotation-${{ steps.ver.outputs.version }}.dylib
+            SHA256SUMS.txt
+          if-no-files-found: error
+
+      # ── Release on tag push ─────────────────────────────────────────────
+      - name: Publish GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          name: TGProxyRotation ${{ steps.ver.outputs.version }}
+          tag_name: ${{ github.ref_name }}
+          files: |
+            TGProxyRotation-${{ steps.ver.outputs.version }}.deb
+            TGProxyRotation-${{ steps.ver.outputs.version }}.dylib
+            SHA256SUMS.txt
+          body: |
+            Automatic build of TGProxyRotation `${{ steps.ver.outputs.version }}` from tag `${{ github.ref_name }}`.
+
+            ## Install
+            - **RootHide Bootstrap / rootless jailbreak** — install the `.deb` via Sileo.
+            - **Sideload (no jailbreak)** — inject the `.dylib` via Sideloadly or TrollFools.
+
+            ## SHA256
+            See `SHA256SUMS.txt` (also reproduced in the table below).
+
+            Binaries are also mirrored on the APT repo at <https://ios.ratu.sh>.
+          generate_release_notes: true
+          make_latest: true

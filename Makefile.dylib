@@ -1,0 +1,32 @@
+# Sideload-friendly dylib build (no MobileSubstrate dependency).
+# Produces a standalone .dylib that can be injected via Sideloadly (into an IPA)
+# or TrollFools. No RootHide/Bootstrap required — works on any jailbroken or
+# sideloaded (cert-signed) device.
+#
+# The constructor uses +load / __attribute__((constructor)) instead of %ctor,
+# and hooks are installed via direct method_exchange (fishhook-style is not
+# needed here; we use objc runtime swizzling for the MTContext/MTTransport/
+# UITableViewCell hooks).
+#
+# Build:
+#   make -f Makefile.dylib clean package
+# Output:
+#   .theos/obj/arm64/TGProxyRotation.dylib
+
+TARGET := iphone:clang:16.5:14.0
+ARCHS = arm64
+INSTALL_TARGET_PROCESSES = Telegram
+
+include $(THEOS)/makefiles/common.mk
+
+LIBRARY_NAME = TGProxyRotation
+
+TGProxyRotation_FILES = \
+	Tweak.dylib.m \
+	Logger.m
+
+TGProxyRotation_CFLAGS = -fobjc-arc -Wno-deprecated-declarations -Wno-unguarded-availability -Wno-unused-function -DSELDLOAD_DYLIB
+TGProxyRotation_FRAMEWORKS = UIKit Foundation Security
+TGProxyRotation_LDFLAGS = -Wl,-install_name,@rpath/TGProxyRotation.dylib
+
+include $(THEOS_MAKE_PATH)/library.mk

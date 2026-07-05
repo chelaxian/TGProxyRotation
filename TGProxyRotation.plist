@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>Filter</key>
+	<dict>
+		<!-- Client-agnostic: inject into any MTProtoKit-based Telegram client
+		     (official Telegram, Swiftgram, Nicegram, …) by filtering on the
+		     MTContext class instead of a single bundle id / executable name. -->
+		<key>Classes</key>
+		<array>
+			<string>MTContext</string>
+		</array>
+	</dict>
+</dict>
+</plist>
