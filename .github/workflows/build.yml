@@ -75,37 +75,40 @@ jobs:
           cd "$WORK/root"
 
           # macOS has no dpkg-deb, so unpack the .deb via plain `ar` + `tar`.
-          # A .deb is an `ar` archive of: debian-binary, control.tar.gz, data.tar.*.
           ar x "$GITHUB_WORKSPACE/$ROOTLESS"
+          ls -la
 
-          # Theos may emit data.tar.gz OR data.tar.lzma — detect via filename.
-          if   [ -f data.tar.lzma ]; then DATA_FLAG="--use-compress-program=lzma -xf"
-          elif [ -f data.tar.xz  ]; then DATA_FLAG="-xJf"
-          else                              DATA_FLAG="-xzf"; fi
+          # Theos emits data.tar.lzma (not .gz). Find the actual data member.
+          DATA_TAR="$(ls data.tar.* 2>/dev/null | head -1)"
+          echo ">> data tarball found: $DATA_TAR"
+          case "$DATA_TAR" in
+            *.lzma) DECOMP="lzma -d -c" ;;
+            *.xz)   DECOMP="xz -d -c"   ;;
+            *.gz)   DECOMP="gzip -d -c" ;;
+            *)      DECOMP="cat"        ;;
+          esac
 
           mkdir -p data ctrl
-          (cd data && tar $DATA_FLAG  ../data.tar.* 2>/dev/null || tar $DATA_FLAG ../data.tar.gz)
-          (cd ctrl  && tar -xzf ../control.tar.gz)
+          $DECOMP < "$DATA_TAR" | (cd data && tar xf -)
+          (cd ctrl && tar -xzf ../control.tar.gz)
+          echo ">> extracted. data/ tree:"; find data -type f -o -type l | sed 's/^/   /'
 
           # 1) Mark the package as arm64e so RootHide/Sileo picks it up.
           sed -i '' 's/^Architecture: iphoneos-arm64$/Architecture: iphoneos-arm64e/' \
             "ctrl/control"
 
           # 2) Drop the .roothidepatch sentinel next to the dylib.
-          # It's a symlink whose target only exists on a RootHide device;
-          # that's exactly what RootHide's on-device patcher expects.
           DYLIB_DIR="data/Library/MobileSubstrate/DynamicLibraries"
           ln -sf /usr/lib/DynamicPatches/AutoPatches.dylib \
             "$DYLIB_DIR/TGProxyRotation.dylib.roothidepatch"
+          ls -la "$DYLIB_DIR"
 
-          # Repack control.tar.gz and data.tar.gz, then re-assemble the .ar.
-          # Use gzip -n to drop embedded timestamps for reproducibility.
+          # Repack control.tar.gz and data.tar.gz (gzip -n for reproducibility).
           (cd ctrl && tar czf "$WORK/control.tar.gz" --owner=0 --group=0 -n .)
           (cd data && tar czf "$WORK/data.tar.gz"    --owner=0 --group=0 -n .)
-
           echo "2.0" > "$WORK/debian-binary"
 
-          # Build the .deb as a BSD `ar` archive (the format dpkg expects).
+          # Re-assemble the .deb as a BSD `ar` archive.
           ar rcs "$GITHUB_WORKSPACE/$RHPATCH" \
             "$WORK/debian-binary" \
             "$WORK/control.tar.gz" \
