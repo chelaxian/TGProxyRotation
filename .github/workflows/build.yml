@@ -72,12 +72,20 @@ jobs:
           RHPATCH="TGProxyRotation-${{ steps.ver.outputs.version }}-roothide.deb"
           WORK="$RUNNER_TEMP/roothide-repack"
           rm -rf "$WORK"; mkdir -p "$WORK/root"
+          cd "$WORK/root"
 
           # macOS has no dpkg-deb, so unpack the .deb via plain `ar` + `tar`.
           # A .deb is an `ar` archive of: debian-binary, control.tar.gz, data.tar.*.
-          (cd "$WORK/root" && ar x "$GITHUB_WORKSPACE/$ROOTLESS")
-          mkdir data && (cd data && tar xzf ../data.tar.gz)
-          mkdir ctrl  && (cd ctrl  && tar xzf ../control.tar.gz)
+          ar x "$GITHUB_WORKSPACE/$ROOTLESS"
+
+          # Theos may emit data.tar.gz OR data.tar.lzma — detect via filename.
+          if   [ -f data.tar.lzma ]; then DATA_FLAG="--use-compress-program=lzma -xf"
+          elif [ -f data.tar.xz  ]; then DATA_FLAG="-xJf"
+          else                              DATA_FLAG="-xzf"; fi
+
+          mkdir -p data ctrl
+          (cd data && tar $DATA_FLAG  ../data.tar.* 2>/dev/null || tar $DATA_FLAG ../data.tar.gz)
+          (cd ctrl  && tar -xzf ../control.tar.gz)
 
           # 1) Mark the package as arm64e so RootHide/Sileo picks it up.
           sed -i '' 's/^Architecture: iphoneos-arm64$/Architecture: iphoneos-arm64e/' \
@@ -91,19 +99,18 @@ jobs:
             "$DYLIB_DIR/TGProxyRotation.dylib.roothidepatch"
 
           # Repack control.tar.gz and data.tar.gz, then re-assemble the .ar.
-          # Use gzip with -n to drop embedded timestamps for reproducibility.
-          (cd ctrl  && tar czf "$WORK/control.tar.gz" --owner=0 --group=0 -n .)
+          # Use gzip -n to drop embedded timestamps for reproducibility.
+          (cd ctrl && tar czf "$WORK/control.tar.gz" --owner=0 --group=0 -n .)
           (cd data && tar czf "$WORK/data.tar.gz"    --owner=0 --group=0 -n .)
 
           echo "2.0" > "$WORK/debian-binary"
 
           # Build the .deb as a BSD `ar` archive (the format dpkg expects).
-          # Member names must be exactly: debian-binary, control.tar.gz, data.tar.gz.
           ar rcs "$GITHUB_WORKSPACE/$RHPATCH" \
             "$WORK/debian-binary" \
             "$WORK/control.tar.gz" \
             "$WORK/data.tar.gz"
-          echo ">> roothide deb: $RHPATCH ($(wc -c < "$RHPATCH") bytes)"
+          echo ">> roothide deb: $RHPATCH ($(wc -c < "$GITHUB_WORKSPACE/$RHPATCH") bytes)"
 
       # ── Target 3: Sideload dylib (no MobileSubstrate dependency) ────────
       - name: Build sideload dylib
