@@ -70,50 +70,147 @@ jobs:
           set -euo pipefail
           ROOTLESS="${{ steps.deb_rootless.outputs.path }}"
           RHPATCH="TGProxyRotation-${{ steps.ver.outputs.version }}-roothide.deb"
-          WORK="$RUNNER_TEMP/roothide-repack"
-          rm -rf "$WORK"; mkdir -p "$WORK/root"
-          cd "$WORK/root"
+          python3 - <<'PYEOF'
+          import os, sys, io, gzip, lzma, tarfile, struct, time, subprocess
 
-          # macOS has no dpkg-deb, so unpack the .deb via plain `ar` + `tar`.
-          ar x "$GITHUB_WORKSPACE/$ROOTLESS"
-          ls -la
+          ROOTLESS = os.environ['ROOTLESS']
+          RHPATCH  = os.environ['RHPATCH']
+          GITHUB_W = os.environ['GITHUB_WORKSPACE']
 
-          # Theos emits data.tar.lzma (not .gz). Find the actual data member.
-          DATA_TAR="$(ls data.tar.* 2>/dev/null | head -1)"
-          echo ">> data tarball found: $DATA_TAR"
-          case "$DATA_TAR" in
-            *.lzma) DECOMP="lzma -d -c" ;;
-            *.xz)   DECOMP="xz -d -c"   ;;
-            *.gz)   DECOMP="gzip -d -c" ;;
-            *)      DECOMP="cat"        ;;
-          esac
+          def read_ar_members(path):
+              with open(path,'rb') as f:
+                  assert f.read(8) == b'!<arch>\n'
+                  members = []
+                  while True:
+                      hdr = f.read(60)
+                      if len(hdr) < 60: break
+                      name_field = hdr[:16].decode('ascii','replace').rstrip()
+                      size = int(hdr[48:58].strip())
+                      body = f.read(size)
+                      if size % 2: f.read(1)
+                      # GNU long-name: #1/<n> means real name is first n bytes of body
+                      if name_field.startswith('#1/'):
+                          n = int(name_field[3:])
+                          real = body[:n].rstrip(b'\x00').decode('ascii')
+                          body = body[n:]
+                      elif name_field == '//':
+                          continue  # long-name index, ignore
+                      elif name_field == '/':
+                          continue  # symbol table
+                      elif name_field.startswith('/'):
+                          # name is offset into the // table — skip, we don't need it
+                          real = name_field
+                      else:
+                          real = name_field
+                      members.append((real, body))
+              return members
 
-          mkdir -p data ctrl
-          $DECOMP < "$DATA_TAR" | (cd data && tar xf -)
-          (cd ctrl && tar -xzf ../control.tar.gz)
-          echo ">> extracted. data/ tree:"; find data -type f -o -type l | sed 's/^/   /'
+          members = read_ar_members(os.path.join(GITHUB_W, ROOTLESS))
+          debian_bin = b'2.0\n'
+          control_blob = None
+          data_blob = None
+          for name, body in members:
+              if name == 'debian-binary':       debian_bin   = body
+              elif name == 'control.tar.gz':    control_blob = body
+              elif name.startswith('data.tar.'): data_blob   = body
+          assert control_blob and data_blob, f'missing members: {[m[0] for m in members]}'
 
-          # 1) Mark the package as arm64e so RootHide/Sileo picks it up.
-          sed -i '' 's/^Architecture: iphoneos-arm64$/Architecture: iphoneos-arm64e/' \
-            "ctrl/control"
+          # Extract data tarball (Theos uses lzma)
+          def decompress(blob, name):
+              if   name.endswith('.lzma') or name.endswith('.xz'):  return lzma.decompress(blob)
+              elif name.endswith('.gz'):                            return gzip.decompress(blob)
+              else:                                                 return blob
 
-          # 2) Drop the .roothidepatch sentinel next to the dylib.
-          DYLIB_DIR="data/Library/MobileSubstrate/DynamicLibraries"
-          ln -sf /usr/lib/DynamicPatches/AutoPatches.dylib \
-            "$DYLIB_DIR/TGProxyRotation.dylib.roothidepatch"
-          ls -la "$DYLIB_DIR"
+          data_name = next(n for n,_ in members if n.startswith('data.tar.'))
+          data_tar_bytes  = decompress(data_blob, data_name)
+          control_tar_bytes = gzip.decompress(control_blob)
 
-          # Repack control.tar.gz and data.tar.gz (gzip -n for reproducibility).
-          (cd ctrl && tar czf "$WORK/control.tar.gz" --owner=0 --group=0 -n .)
-          (cd data && tar czf "$WORK/data.tar.gz"    --owner=0 --group=0 -n .)
-          echo "2.0" > "$WORK/debian-binary"
+          def tar_add_path(tf, arcname, *, data=None, symlink=None):
+              ti = tarfile.TarInfo(name=arcname)
+              if symlink is not None:
+                  ti.type = tarfile.SYMTYPE
+                  ti.linkname = symlink
+                  ti.mode = 0o777
+                  ti.mtime = 0
+                  ti.uid = ti.gid = 0
+                  ti.uname = ti.gname = ''
+              else:
+                  ti.size = len(data or b'')
+                  ti.mode = 0o644
+                  ti.mtime = 0
+                  ti.uid = ti.gid = 0
+                  ti.uname = ti.gname = ''
+              tf.addfile(ti, io.BytesIO(data or b''))
 
-          # Re-assemble the .deb as a BSD `ar` archive.
-          ar rcs "$GITHUB_WORKSPACE/$RHPATCH" \
-            "$WORK/debian-binary" \
-            "$WORK/control.tar.gz" \
-            "$WORK/data.tar.gz"
-          echo ">> roothide deb: $RHPATCH ($(wc -c < "$GITHUB_WORKSPACE/$RHPATCH") bytes)"
+          # Rebuild data.tar.gz: copy original members, flip architecture in control,
+          # add .roothidepatch sentinel next to the dylib.
+          data_io = io.BytesIO()
+          with tarfile.open(fileobj=data_io, mode='w:gz') as tf:
+              src = tarfile.open(fileobj=io.BytesIO(data_tar_bytes), mode='r:')
+              for m in src.getmembers():
+                  if m.isfile():
+                      tf.addfile(m, src.extractfile(m))
+                  else:
+                      # preserve dirs/symlinks as-is
+                      tf.addfile(m)
+              src.close()
+              # Add the RootHide sentinel as a symlink
+              tar_add_path(tf, './Library/MobileSubstrate/DynamicLibraries/TGProxyRotation.dylib.roothidepatch',
+                           symlink='/usr/lib/DynamicPatches/AutoPatches.dylib')
+          data_io.seek(0)
+          new_data_gz = data_io.getvalue()
+
+          # Rebuild control.tar.gz with patched Architecture field
+          ctrl_io = io.BytesIO()
+          with tarfile.open(fileobj=ctrl_io, mode='w:gz') as tf:
+              src = tarfile.open(fileobj=io.BytesIO(control_tar_bytes), mode='r:')
+              for m in src.getmembers():
+                  if m.isfile() and m.name.rstrip('/').endswith('control'):
+                      txt = src.extractfile(m).read().decode('utf-8')
+                      txt = txt.replace('Architecture: iphoneos-arm64',
+                                        'Architecture: iphoneos-arm64e')
+                      ti = tarfile.TarInfo(name=m.name)
+                      ti.size = len(txt.encode('utf-8'))
+                      ti.mode = 0o644; ti.mtime = 0; ti.uid = ti.gid = 0
+                      ti.uname = ti.gname = ''
+                      tf.addfile(ti, io.BytesIO(txt.encode('utf-8')))
+                  else:
+                      tf.addfile(m)
+              src.close()
+          ctrl_io.seek(0)
+          new_control_gz = ctrl_io.getvalue()
+
+          # Assemble the .deb as a portable `ar` archive (BSD/GNU-compatible:
+          # short member names, no symbol table, no long-name index).
+          def ar_member(name, body):
+              name = name.ljust(16)[:16]
+              size = str(len(body)).ljust(10)[:10]
+              hdr  = (name +
+                      str(int(time.time())).ljust(12) +   # mtime
+                      '0'.ljust(6) +                       # owner
+                      '0'.ljust(6) +                       # group
+                      '100644'.ljust(8) +                  # mode
+                      size + '`\n')
+              assert len(hdr) == 60, len(hdr)
+              out = hdr.encode('ascii') + body
+              if len(body) % 2: out += b'\n'
+              return out
+
+          with open(os.path.join(GITHUB_W, RHPATCH), 'wb') as f:
+              f.write(b'!<arch>\n')
+              f.write(ar_member('debian-binary',  debian_bin))
+              f.write(ar_member('control.tar.gz', new_control_gz))
+              f.write(ar_member('data.tar.gz',    new_data_gz))
+
+          sz = os.path.getsize(os.path.join(GITHUB_W, RHPATCH))
+          print(f'>> roothide deb: {RHPATCH} ({sz} bytes)')
+          # sanity: re-read and report members
+          for n, b in read_ar_members(os.path.join(GITHUB_W, RHPATCH)):
+              print(f'    member {n}: {len(b)} bytes')
+          PYEOF
+        env:
+          ROOTLESS: ${{ steps.deb_rootless.outputs.path }}
+          RHPATCH: TGProxyRotation-${{ steps.ver.outputs.version }}-roothide.deb
 
       # ── Target 3: Sideload dylib (no MobileSubstrate dependency) ────────
       - name: Build sideload dylib
