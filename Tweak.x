@@ -1024,6 +1024,7 @@ typedef NS_ENUM(NSInteger, TGShieldStatus) {
 @property (nonatomic, strong) UIButton *minimizeButton;
 @property (nonatomic, strong) UILabel *hintLabel;
 @property (nonatomic, strong) UILabel *bottomHintLabel;
+@property (nonatomic, strong) UILabel *proxyHintLabel;
 @property (nonatomic, strong) UIView *telemtRow;
 @property (nonatomic, strong) TGCheckboxView *telemtCheckbox;
 @property (nonatomic, strong) UILabel *telemtTitle;
@@ -1197,6 +1198,24 @@ static void TGUpdatePanel(void) {
     [card addSubview:status];
     self.statusLabel = status;
 
+    // Long press on status label opens Telegram native proxy dialog.
+    status.userInteractionEnabled = YES;
+    UILongPressGestureRecognizer *statusLong = [[UILongPressGestureRecognizer alloc]
+        initWithTarget:self action:@selector(onProxyLongPress:)];
+    statusLong.minimumPressDuration = 0.5;
+    [status addGestureRecognizer:statusLong];
+
+    // Proxy hint above the arrows/status: "(long tap on proxy address — add to TG)".
+    UILabel *proxyHint = [[UILabel alloc] init];
+    proxyHint.translatesAutoresizingMaskIntoConstraints = NO;
+    proxyHint.font = [UIFont systemFontOfSize:9];
+    proxyHint.textColor = TGSecondaryColor();
+    proxyHint.adjustsFontSizeToFitWidth = YES;
+    proxyHint.minimumScaleFactor = 0.7;
+    proxyHint.textAlignment = NSTextAlignmentCenter;
+    [card addSubview:proxyHint];
+    self.proxyHintLabel = proxyHint;
+
     // Bottom hint: "(long press on arrows to random switch)".
     UILabel *bottomHint = [[UILabel alloc] init];
     bottomHint.translatesAutoresizingMaskIntoConstraints = NO;
@@ -1343,7 +1362,10 @@ static void TGUpdatePanel(void) {
         [sep2.leadingAnchor constraintEqualToAnchor:card.leadingAnchor constant:18],
         [sep2.trailingAnchor constraintEqualToAnchor:card.trailingAnchor constant:-18],
         [sep2.heightAnchor constraintEqualToConstant:0.5],
-        [status.topAnchor constraintEqualToAnchor:sep2.bottomAnchor constant:12],
+        [proxyHint.topAnchor constraintEqualToAnchor:sep2.bottomAnchor constant:8],
+        [proxyHint.leadingAnchor constraintEqualToAnchor:card.leadingAnchor constant:18],
+        [proxyHint.trailingAnchor constraintEqualToAnchor:card.trailingAnchor constant:-18],
+        [status.topAnchor constraintEqualToAnchor:proxyHint.bottomAnchor constant:4],
         [status.leadingAnchor constraintEqualToAnchor:prev.trailingAnchor constant:10],
         [status.trailingAnchor constraintEqualToAnchor:next.leadingAnchor constant:-10],
         // Manual prev/next buttons aligned vertically with the status text,
@@ -1396,7 +1418,7 @@ static void TGUpdatePanel(void) {
         self.card = nil; self.checkbox = nil; self.segmentStack = nil;
         self.segmentButtons = nil; self.panelTitleLabel = nil; self.statusLabel = nil; self.languageButton = nil;
         self.prevButton = nil; self.nextButton = nil; self.minimizeButton = nil;
-        self.hintLabel = nil; self.bottomHintLabel = nil;
+        self.hintLabel = nil; self.bottomHintLabel = nil; self.proxyHintLabel = nil;
         self.telemtRow = nil; self.telemtCheckbox = nil; self.telemtTitle = nil;
         self.proxyOffButton = nil; self.telemtHintLabel = nil;
         self.cardOffset = CGPointZero; self.window.hidden = YES; self.window = nil;
@@ -1523,6 +1545,8 @@ static void TGUpdatePanel(void) {
     UIColor *secondary = TGSecondaryColor();
     // Top hint removed (proxy toggle now has a dedicated ON/OFF button).
     self.hintLabel.text = @"";
+    self.proxyHintLabel.text = TGLoc(@"(\u0434\u043e\u043b\u0433\u0438\u0439 \u0442\u0430\u043f \u043d\u0430 \u0430\u0434\u0440\u0435\u0441\u0435 \u043f\u0440\u043e\u043a\u0441\u0438 \u2014 \u0434\u043e\u0431\u0430\u0432\u0438\u0442\u044c \u0432 TG)",
+                                      @"(long tap on proxy address \u2014 add to TG)");
     self.bottomHintLabel.text = TGLoc(@"(\u0434\u043e\u043b\u0433\u0438\u0439 \u0442\u0430\u043f \u043f\u043e \u0441\u0442\u0440\u0435\u043b\u043a\u0430\u043c \u2014 \u0441\u043b\u0443\u0447\u0430\u0439\u043d\u044b\u0439 \u0432\u044b\u0431\u043e\u0440)",
                                       @"(long press on arrows to random switch)");
     // Telemtrs search checkbox state.
@@ -1987,6 +2011,38 @@ static void TGUpdatePanel(void) {
     TGLog(@"UI random proxy -> idx=%ld (of %ld)", (long)randomIdx, (long)list.count);
     TGRotateBy(delta);
 }
+- (void)onProxyLongPress:(UILongPressGestureRecognizer *)g {
+    if (g.state != UIGestureRecognizerStateBegan) return;
+    NSArray *list;
+    if (gTelemtSearch) {
+        @synchronized(gTelemtProxies) { list = [gTelemtProxies copy]; }
+    } else {
+        @synchronized(gProxies) { list = [gProxies copy]; }
+    }
+    if (list.count == 0) return;
+    NSUInteger idx = (gCurrentIndex >= 0 && gCurrentIndex < (NSInteger)list.count) ? (NSUInteger)gCurrentIndex : 0;
+    NSDictionary *p = list[idx];
+    NSString *link = p[@"link"];
+    if (!link.length) {
+        NSString *host = p[@"host"];
+        NSNumber *port = p[@"port"];
+        NSData *secret = (p[@"secret"] == [NSNull null]) ? nil : p[@"secret"];
+        NSString *secretHex = @"";
+        if (secret.length > 0) {
+            const unsigned char *sb = secret.bytes;
+            NSMutableString *hex = [NSMutableString stringWithCapacity:secret.length*2];
+            for (NSUInteger k = 0; k < secret.length; k++) [hex appendFormat:@"%02x", sb[k]];
+            secretHex = hex;
+        }
+        link = [NSString stringWithFormat:@"tg://proxy?server=%@&port=%@&secret=%@", host, port, secretHex];
+    }
+    NSURL *url = [NSURL URLWithString:link];
+    if (url) {
+        [[UIApplication sharedApplication] openURL:url options:@{} completionHandler:nil];
+        TGLog(@"long press: opening proxy link %@", link);
+    }
+}
+
 @end
 
 #pragma mark - Gestures

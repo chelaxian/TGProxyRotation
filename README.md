@@ -20,6 +20,7 @@
 - 🔄 **Автопереключение прокси по кругу**, когда связь пропадает
 - ⏱️ **Настраиваемый интервал ожидания**: 5 / 10 / 15 / 30 / 60 сек
 - ⬅️➡️ **Ручное переключение стрелками** (долгий тап — случайный прокси)
+- 📋 **Долгий тап на адресе прокси** — добавление в штатный список проксей Telegram
 - 🌐 **Внешний список прокси по ссылке** (свой URL, `txt`: по одному `tg://proxy` или `https://t.me/proxy` на строку) — список кэшируется и подтягивается мгновенно при запуске
 - ✅ Показывает **активный прокси, пинг и обратный отсчёт** до переключения
 - 🇷🇺🇬🇧 Интерфейс **на русском и английском**
@@ -82,10 +83,22 @@ RootHide Bootstrap сам определит, какой вариант нуже
 
 Скачать из [последнего Release](https://github.com/chelaxian/TGProxyRotation/releases/latest) и установить через Sileo / Filza.
 
+<details>
+<summary>📦 Старые версии (для отката)</summary>
+
+| Версия | rootless deb | roothide deb | sideload dylib |
+|---|---|---|---|
+| **0.15.0** | [TGProxyRotation-0.15.0-rootless.deb](https://github.com/chelaxian/TGProxyRotation/releases/download/v0.15.0/TGProxyRotation-0.15.0-rootless.deb) | [TGProxyRotation-0.15.0-roothide.deb](https://github.com/chelaxian/TGProxyRotation/releases/download/v0.15.0/TGProxyRotation-0.15.0-roothide.deb) | [TGProxyRotation-0.15.0.dylib](https://ios.ratu.sh/sideload/TGProxyRotation-0.15.0.dylib) |
+| **0.15.1** | [TGProxyRotation-0.15.1-rootless.deb](https://github.com/chelaxian/TGProxyRotation/releases/download/v0.15.1/TGProxyRotation-0.15.1-rootless.deb) | [TGProxyRotation-0.15.1-roothide.deb](https://github.com/chelaxian/TGProxyRotation/releases/download/v0.15.1/TGProxyRotation-0.15.1-roothide.deb) | [TGProxyRotation-0.15.1.dylib](https://ios.ratu.sh/sideload/TGProxyRotation-0.15.1.dylib) |
+
+</details>
+
 ### Вариант 3 — sideload dylib (БЕЗ джейлбрейка)
 
 Для инъекции через **Sideloadly** или **TrollFools** в IPA Telegram:
-- 📥 [TGProxyRotation-0.15.0.dylib](https://ios.ratu.sh/sideload/TGProxyRotation-0.15.0.dylib)
+- 📥 [TGProxyRotation-1.0.0.dylib](https://ios.ratu.sh/sideload/TGProxyRotation-1.0.0.dylib)
+- 🕓 [TGProxyRotation-0.15.0.dylib](https://ios.ratu.sh/sideload/TGProxyRotation-0.15.0.dylib) (старая)
+- 🕓 [TGProxyRotation-0.15.1.dylib](https://ios.ratu.sh/sideload/TGProxyRotation-0.15.1.dylib) (старая)
 
 ---
 
