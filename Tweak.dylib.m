@@ -2038,8 +2038,24 @@ static void TGUpdatePanel(void) {
     }
     NSURL *url = [NSURL URLWithString:link];
     if (url) {
-        [[UIApplication sharedApplication] openURL:url options:@{} completionHandler:nil];
-        TGLog(@"long press: opening proxy link %@", link);
+        // Handle the URL within the current app instead of going through iOS
+        // system dispatcher (which may open a different Telegram client when
+        // multiple ones are installed). We call the app delegate's URL handler
+        // directly, bypassing UIApplication openURL: scheme resolution.
+        UIApplication *app = [UIApplication sharedApplication];
+        id<UIApplicationDelegate> delegate = app.delegate;
+        BOOL handled = NO;
+        if ([delegate respondsToSelector:@selector(application:openURL:options:)]) {
+            handled = [delegate application:app openURL:url options:@{}];
+        }
+        if (!handled && [delegate respondsToSelector:@selector(application:openURL:sourceApplication:annotation:)]) {
+            handled = [delegate application:app openURL:url sourceApplication:nil annotation:nil];
+        }
+        if (!handled) {
+            // Fallback: system openURL (may open another Telegram client).
+            [app openURL:url options:@{} completionHandler:nil];
+        }
+        TGLog(@"long press: opening proxy link %@ (internal=%d)", link, handled);
     }
 }
 
