@@ -57,6 +57,7 @@ static TGGestureTarget *gGestureTarget;
 #define kKeyTelemt     @"telemtSearch"  // YES = fetch proxies from online list
 #define kKeyProxyURL   @"proxyListURL"  // custom URL for proxy list
 #define kDefaultProxyURL @"https://raw.githubusercontent.com/chelaxian/freetelemt/main/proxies.txt"
+#define kKeyShowHints   @"showHints"    // YES = show small-font hint labels
 
 static NSString *TGPrefsPath(void) {
     NSString *lib = [NSHomeDirectory() stringByAppendingPathComponent:@"Library"];
@@ -76,6 +77,7 @@ static BOOL gStartupPending = NO; // TRUE: first watchdog tick should apply save
 static BOOL gTelemtSearch = NO;   // fetch proxies from online list
 static NSMutableArray<NSDictionary *> *gTelemtProxies = nil; // online-fetched proxies
 static NSString *gProxyListURL = kDefaultProxyURL;
+static BOOL gShowHints = YES;            // show/hide small-font hint labels
 static NSMutableArray<NSDictionary *> *gProxies = nil; // host,port,secret,link
 static NSInteger gCurrentIndex = 0;
 static NSString *gActiveProxyHost = nil; // host currently rotated to by tweak
@@ -314,6 +316,9 @@ static void TGPrefsApply(NSDictionary *p) {
     if (!gTelemtProxies) gTelemtProxies = [NSMutableArray array];
     NSString *savedURL = p[kKeyProxyURL];
     if (savedURL.length) gProxyListURL = [savedURL copy];
+    // Hint visibility (default YES).
+    id hintVal = p[kKeyShowHints];
+    gShowHints = hintVal ? [hintVal boolValue] : YES;
     NSString *lang = p[kKeyLanguage];
     gLanguage = [lang isEqualToString:@"en"] ? @"en" : @"ru";
     gCurrentIndex = [p[kKeyIndex] integerValue];
@@ -1022,6 +1027,7 @@ typedef NS_ENUM(NSInteger, TGShieldStatus) {
 @property (nonatomic, strong) UIButton *prevButton;
 @property (nonatomic, strong) UIButton *nextButton;
 @property (nonatomic, strong) UIButton *minimizeButton;
+@property (nonatomic, strong) UIButton *infoButton;
 @property (nonatomic, strong) UILabel *hintLabel;
 @property (nonatomic, strong) UILabel *bottomHintLabel;
 @property (nonatomic, strong) UILabel *proxyHintLabel;
@@ -1108,6 +1114,16 @@ static void TGUpdatePanel(void) {
     [minimize addTarget:self action:@selector(minimize) forControlEvents:UIControlEventTouchUpInside];
     [card addSubview:minimize];
     self.minimizeButton = minimize;
+
+    // Info button "\u24d8" centered between minimize and close.
+    UIButton *info = [UIButton buttonWithType:UIButtonTypeSystem];
+    info.translatesAutoresizingMaskIntoConstraints = NO;
+    [info setTitle:@"\u24d8" forState:UIControlStateNormal];
+    info.titleLabel.font = [UIFont systemFontOfSize:15];
+    [info setTitleColor:TGSecondaryColor() forState:UIControlStateNormal];
+    [info addTarget:self action:@selector(onInfoToggle:) forControlEvents:UIControlEventTouchUpInside];
+    [card addSubview:info];
+    self.infoButton = info;
 
     // Small hint between minimize and close: "(long press to disable proxy)".
     UILabel *hint = [[UILabel alloc] init];
@@ -1331,7 +1347,11 @@ static void TGUpdatePanel(void) {
         [minimize.centerYAnchor constraintEqualToAnchor:hide.centerYAnchor],
         [minimize.leadingAnchor constraintEqualToAnchor:card.leadingAnchor constant:10],
         [minimize.widthAnchor constraintEqualToConstant:26], [minimize.heightAnchor constraintEqualToConstant:26],
-        // Hint label centered between minimize and close buttons.
+        // Info button centered between minimize and close.
+        [info.centerXAnchor constraintEqualToAnchor:card.centerXAnchor],
+        [info.centerYAnchor constraintEqualToAnchor:hide.centerYAnchor],
+        [info.widthAnchor constraintEqualToConstant:26], [info.heightAnchor constraintEqualToConstant:26],
+        // Hint label between minimize and info button.
         [hint.centerYAnchor constraintEqualToAnchor:hide.centerYAnchor],
         [hint.leadingAnchor constraintEqualToAnchor:minimize.trailingAnchor constant:4],
         [hint.trailingAnchor constraintEqualToAnchor:hide.leadingAnchor constant:-4],
@@ -1417,7 +1437,7 @@ static void TGUpdatePanel(void) {
                      completion:^(BOOL f) {
         self.card = nil; self.checkbox = nil; self.segmentStack = nil;
         self.segmentButtons = nil; self.panelTitleLabel = nil; self.statusLabel = nil; self.languageButton = nil;
-        self.prevButton = nil; self.nextButton = nil; self.minimizeButton = nil;
+        self.prevButton = nil; self.nextButton = nil; self.minimizeButton = nil; self.infoButton = nil;
         self.hintLabel = nil; self.bottomHintLabel = nil; self.proxyHintLabel = nil;
         self.telemtRow = nil; self.telemtCheckbox = nil; self.telemtTitle = nil;
         self.proxyOffButton = nil; self.telemtHintLabel = nil;
@@ -1545,10 +1565,17 @@ static void TGUpdatePanel(void) {
     UIColor *secondary = TGSecondaryColor();
     // Top hint removed (proxy toggle now has a dedicated ON/OFF button).
     self.hintLabel.text = @"";
-    self.proxyHintLabel.text = TGLoc(@"(\u0434\u043e\u043b\u0433\u0438\u0439 \u0442\u0430\u043f \u043d\u0430 \u0430\u0434\u0440\u0435\u0441\u0435 \u043f\u0440\u043e\u043a\u0441\u0438 \u2014 \u0434\u043e\u0431\u0430\u0432\u0438\u0442\u044c \u0432 TG)",
-                                      @"(long tap on proxy address \u2014 add to TG)");
-    self.bottomHintLabel.text = TGLoc(@"(\u0434\u043e\u043b\u0433\u0438\u0439 \u0442\u0430\u043f \u043f\u043e \u0441\u0442\u0440\u0435\u043b\u043a\u0430\u043c \u2014 \u0441\u043b\u0443\u0447\u0430\u0439\u043d\u044b\u0439 \u0432\u044b\u0431\u043e\u0440)",
-                                      @"(long press on arrows to random switch)");
+    // Info button reflects hint visibility state.
+    [self.infoButton setTitleColor:(gShowHints ? TGAccentColor() : TGSecondaryColor()) forState:UIControlStateNormal];
+    // Hint labels visibility controlled by gShowHints.
+    NSString *proxyHintText = gShowHints ? TGLoc(@"(\u0434\u043e\u043b\u0433\u0438\u0439 \u0442\u0430\u043f \u043d\u0430 \u0430\u0434\u0440\u0435\u0441\u0435 \u043f\u0440\u043e\u043a\u0441\u0438 \u2014 \u0434\u043e\u0431\u0430\u0432\u0438\u0442\u044c \u0432 TG)",
+                                      @"(long tap on proxy address \u2014 add to TG)") : @"";
+    NSString *bottomHintText = gShowHints ? TGLoc(@"(\u0434\u043e\u043b\u0433\u0438\u0439 \u0442\u0430\u043f \u043f\u043e \u0441\u0442\u0440\u0435\u043b\u043a\u0430\u043c \u2014 \u0441\u043b\u0443\u0447\u0430\u0439\u043d\u044b\u0439 \u0432\u044b\u0431\u043e\u0440)",
+                                      @"(long press on arrows to random switch)") : @"";
+    NSString *telemtHintText = gShowHints ? TGLoc(@"(\u0434\u043e\u043b\u0433\u0438\u0439 \u0442\u0430\u043f \u043f\u043e \u0433\u0430\u043b\u043e\u0447\u043a\u0435 \u2014 \u0438\u0437\u043c\u0435\u043d\u0438\u0442\u044c URL)",
+                                      @"(long press on checkbox to change URL)") : @"";
+    self.proxyHintLabel.text = proxyHintText;
+    self.bottomHintLabel.text = bottomHintText;
     // Telemtrs search checkbox state.
     self.telemtCheckbox.on = gTelemtSearch;
     self.telemtCheckbox.cross = NO;
@@ -1556,8 +1583,7 @@ static void TGUpdatePanel(void) {
     self.telemtTitle.text = [NSString stringWithFormat:@"%@%@",
         TGLoc(@"\u0412\u043d\u0435\u0448\u043d\u0438\u0439 \u0441\u043f\u0438\u0441\u043e\u043a \u043f\u0440\u043e\u043a\u0441\u0438", @"External proxy list"),
         telemtCount > 0 ? [NSString stringWithFormat:@" (%ld)", (long)telemtCount] : @""];
-    self.telemtHintLabel.text = TGLoc(@"(\u0434\u043e\u043b\u0433\u0438\u0439 \u0442\u0430\u043f \u043f\u043e \u0433\u0430\u043b\u043e\u0447\u043a\u0435 \u2014 \u0438\u0437\u043c\u0435\u043d\u0438\u0442\u044c URL)",
-                                      @"(long press on checkbox to change URL)");
+    self.telemtHintLabel.text = telemtHintText;
     // Proxy OFF/ON button: shows "OFF" when proxy is on, "ON" when off.
     if (gProxyOff) {
         [self.proxyOffButton setTitle:@"ON" forState:UIControlStateNormal];
@@ -1979,6 +2005,14 @@ static void TGUpdatePanel(void) {
     p[kKeyLanguage] = gLanguage;
     TGPrefsSave(p);
     TGLog(@"UI language -> %@", gLanguage);
+    [self update];
+}
+- (void)onInfoToggle:(__unused UIButton *)b {
+    gShowHints = !gShowHints;
+    NSMutableDictionary *p = [TGPrefsLoad() mutableCopy] ?: [NSMutableDictionary dictionary];
+    p[kKeyShowHints] = @(gShowHints);
+    [p writeToFile:TGPrefsPath() atomically:YES];
+    TGLog(@"UI hints -> %d", gShowHints);
     [self update];
 }
 - (void)onPrevProxy:(__unused UIButton *)b {
