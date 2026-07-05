@@ -27,7 +27,6 @@ jobs:
           git -C "$RUNNER_TEMP/theos-sdks" sparse-checkout set iPhoneOS16.5.sdk
           cp -R "$RUNNER_TEMP/theos-sdks/iPhoneOS16.5.sdk" "$HOME/theos/sdks/"
 
-      # ── Version (read from control) ─────────────────────────────────────
       - name: Read version
         id: ver
         run: |
@@ -35,28 +34,66 @@ jobs:
           echo "version=$v" >> "$GITHUB_OUTPUT"
           echo ">> building TGProxyRotation $v"
 
-      # ── Target 1: RootHide / rootless deb ───────────────────────────────
-      # Mach-O is built as rootless arm64; the `after-stage` rule drops a
-      # `.roothidepatch` sentinel next to the dylib so RootHide Bootstrap's
-      # on-device patcher re-chunks it for arm64e/PAC at install time.
-      # Rootless installers simply ignore the sentinel. One deb, both worlds.
-      - name: Build deb (Tweak.x)
+      # ── Target 1: plain rootless deb (Dopamine / NathanLR / NekoJB / Sileo) ─
+      # Mach-O is rootless arm64, no PAC, no sentinel. Theos emits it directly.
+      - name: Build rootless deb
         env:
           THEOS: ${{ github.workspace }}/../theos
         run: |
           export THEOS="$HOME/theos"
           gmake clean package FINALPACKAGE=1
 
-      - name: Locate deb
-        id: deb
+      - name: Locate + rename rootless deb
+        id: deb_rootless
         run: |
-          deb="$(ls packages/com.ratush.tgproxyrotation_*_iphoneos-arm64e.deb | head -1)"
-          echo "path=$deb" >> "$GITHUB_OUTPUT"
-          cp "$deb" "TGProxyRotation-${{ steps.ver.outputs.version }}.deb"
-          echo ">> deb: $deb ($(wc -c < "$deb") bytes)"
+          src="$(ls packages/com.ratush.tgproxyrotation_*_iphoneos-arm64.deb | head -1)"
+          out="TGProxyRotation-${{ steps.ver.outputs.version }}-rootless.deb"
+          cp "$src" "$out"
+          echo "path=$out" >> "$GITHUB_OUTPUT"
+          echo ">> rootless deb: $out ($(wc -c < "$out") bytes)"
 
-      # ── Target 2: Sideload dylib (no MobileSubstrate dependency) ────────
-      - name: Build sideload dylib (Tweak.dylib.m)
+      # ── Target 2: RootHide-targeted deb ────────────────────────────────
+      # Same rootless arm64 Mach-O, repacked with two RootHide-specific
+      # markers so that RootHide Bootstrap (and Sileo in its context) treats
+      # the package as a RootHide one and runs the on-device patcher:
+      #   1. control field Architecture: iphoneos-arm64e  (replaces arm64)
+      #   2. payload sentinel Library/MobileSubstrate/DynamicLibraries/
+      #      TGProxyRotation.dylib.roothidepatch (symlink to
+      #      /usr/lib/DynamicPatches/AutoPatches.dylib — exists on-device)
+      #
+      # We do this by extracting the Theos-built deb, editing control +
+      # adding the sentinel, and repacking with dpkg-deb. Doing it here
+      # (rather than via Theos's after-stage hook) keeps the Makefile clean
+      # and makes the RootHide variant reproducible on every CI build.
+      - name: Build RootHide deb (repack with sentinel)
+        run: |
+          set -euo pipefail
+          ROOTLESS="${{ steps.deb_rootless.outputs.path }}"
+          RHPATCH="TGProxyRotation-${{ steps.ver.outputs.version }}-roothide.deb"
+          WORK="$RUNNER_TEMP/roothide-repack"
+          rm -rf "$WORK"; mkdir -p "$WORK/root"
+
+          # Extract the Theos-built deb.
+          (cd "$WORK/root" && dpkg-deb -R "$ROOTLESS" .)
+
+          # 1) Mark the package as arm64e so RootHide/Sileo picks it up.
+          sed -i '' 's/^Architecture: iphoneos-arm64$/Architecture: iphoneos-arm64e/' \
+            "$WORK/root/DEBIAN/control"
+
+          # 2) Drop the .roothidepatch sentinel next to the dylib.
+          # It's a symlink whose target only exists on a RootHide device;
+          # that's exactly what RootHide's on-device patcher expects.
+          DYLIB_DIR="$WORK/root/Library/MobileSubstrate/DynamicLibraries"
+          ln -sf /usr/lib/DynamicPatches/AutoPatches.dylib \
+            "$DYLIB_DIR/TGProxyRotation.dylib.roothidepatch"
+
+          # Repack. --root-owner-group keeps ownership clean.
+          dpkg-deb --root-owner-group -b "$WORK/root" "$WORK/$RHPATCH"
+          cp "$WORK/$RHPATCH" "$RHPATCH"
+          echo ">> roothide deb: $RHPATCH ($(wc -c < "$RHPATCH") bytes)"
+
+      # ── Target 3: Sideload dylib (no MobileSubstrate dependency) ────────
+      - name: Build sideload dylib
         env:
           THEOS: ${{ github.workspace }}/../theos
         run: |
@@ -64,7 +101,7 @@ jobs:
           gmake -f Makefile.dylib clean
           gmake -f Makefile.dylib FINALPACKAGE=1
 
-      - name: Locate dylib
+      - name: Locate + rename sideload dylib
         id: dylib
         run: |
           src=".theos/obj/TGProxyRotation.dylib"
@@ -74,11 +111,12 @@ jobs:
           echo "path=$out" >> "$GITHUB_OUTPUT"
           echo ">> dylib: $out ($(wc -c < "$out") bytes)"
 
-      # ── Hash both artifacts for the release notes ───────────────────────
+      # ── Hash artifacts ──────────────────────────────────────────────────
       - name: Hash artifacts
         run: |
           shasum -a 256 \
-            "TGProxyRotation-${{ steps.ver.outputs.version }}.deb" \
+            "TGProxyRotation-${{ steps.ver.outputs.version }}-rootless.deb" \
+            "TGProxyRotation-${{ steps.ver.outputs.version }}-roothide.deb" \
             "TGProxyRotation-${{ steps.ver.outputs.version }}.dylib" \
             | tee SHA256SUMS.txt
 
@@ -87,7 +125,8 @@ jobs:
         with:
           name: TGProxyRotation-${{ steps.ver.outputs.version }}
           path: |
-            TGProxyRotation-${{ steps.ver.outputs.version }}.deb
+            TGProxyRotation-${{ steps.ver.outputs.version }}-rootless.deb
+            TGProxyRotation-${{ steps.ver.outputs.version }}-roothide.deb
             TGProxyRotation-${{ steps.ver.outputs.version }}.dylib
             SHA256SUMS.txt
           if-no-files-found: error
@@ -100,18 +139,23 @@ jobs:
           name: TGProxyRotation ${{ steps.ver.outputs.version }}
           tag_name: ${{ github.ref_name }}
           files: |
-            TGProxyRotation-${{ steps.ver.outputs.version }}.deb
+            TGProxyRotation-${{ steps.ver.outputs.version }}-rootless.deb
+            TGProxyRotation-${{ steps.ver.outputs.version }}-roothide.deb
             TGProxyRotation-${{ steps.ver.outputs.version }}.dylib
             SHA256SUMS.txt
           body: |
             Automatic build of TGProxyRotation `${{ steps.ver.outputs.version }}` from tag `${{ github.ref_name }}`.
 
-            ## Install
-            - **RootHide Bootstrap / rootless jailbreak** — install the `.deb` via Sileo.
-            - **Sideload (no jailbreak)** — inject the `.dylib` via Sideloadly or TrollFools.
+            ## Downloads — pick the one matching your setup
+
+            | File | For |
+            |---|---|
+            | `TGProxyRotation-${{ steps.ver.outputs.version }}-rootless.deb` | **Rootless jailbreaks**: Dopamine, palera1n rootless, NathanLR, NekoJB — install via Sileo. arm64, no PAC, no RootHide sentinel. |
+            | `TGProxyRotation-${{ steps.ver.outputs.version }}-roothide.deb` | **RootHide Bootstrap** — same binary, repacked with `iphoneos-arm64e` architecture + `.roothidepatch` sentinel so RootHide runs its on-device patcher. |
+            | `TGProxyRotation-${{ steps.ver.outputs.version }}.dylib` | **Sideload (no jailbreak)** — inject via Sideloadly or TrollFools into the Telegram IPA. |
 
             ## SHA256
-            See `SHA256SUMS.txt` (also reproduced in the table below).
+            See `SHA256SUMS.txt`.
 
             Binaries are also mirrored on the APT repo at <https://ios.ratu.sh>.
           generate_release_notes: true

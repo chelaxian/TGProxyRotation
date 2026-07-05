@@ -1,9 +1,16 @@
-# Vanilla Theos on this machine has no `roothide` package scheme, so we follow
-# the proven HPPE pattern: build a rootless dylib+deb with the default `deb`
-# scheme; RootHide Bootstrap installs this form (see com.ratush.hppe).
-# Build rootless arm64 first, then run RootHide Patcher on-device to produce
-# the arm64e/PAC-correct package. Direct Linux arm64e builds produce an
-# incompatible ABI warning and can prevent Telegram from launching.
+# TGProxyRotation — rootless Theos tweak build.
+#
+# Produces a plain rootless arm64 .dylib + .deb under the default `deb` scheme.
+# This single artifact installs on:
+#   - rootless jailbreaks (Dopamine / palera1n rootless / NathanLR / NekoJB)
+#   - RootHide Bootstrap, which re-patches the binary on-device at install time
+#     (it does NOT require the `.roothidepatch` sentinel to be pre-baked —
+#      when installed from an APT repo it runs everything through patch.sh).
+#
+# The CI workflow (`.github/workflows/build.yml`) additionally repacks a copy
+# of this deb with a `TGProxyRotation.dylib.roothidepatch` sentinel as
+# `com.ratush.tgproxyrotation_<ver>_iphoneos-arm64e.deb` for users who install
+# RootHide-targeted packages manually (e.g. via Sileo with the .deb file).
 TARGET := iphone:clang:16.5:14.0
 ARCHS = arm64
 INSTALL_TARGET_PROCESSES = Telegram
@@ -22,6 +29,3 @@ TGProxyRotation_LDFLAGS = -Wl,-install_name,/Library/MobileSubstrate/DynamicLibr
 $(TWEAK_NAME)_LOGOS_DEFAULT_GENERATOR = internal
 
 include $(THEOS_MAKE_PATH)/tweak.mk
-
-after-stage::
-	$(ECHO_NOTHING)ln -sf /usr/lib/DynamicPatches/AutoPatches.dylib "$(THEOS_STAGING_DIR)/Library/MobileSubstrate/DynamicLibraries/TGProxyRotation.dylib.roothidepatch"$(ECHO_END)

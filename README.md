@@ -56,19 +56,26 @@
 
 ## 📦 Установка
 
+> ⚠️ Скачивай тот файл, который соответствует твоему способу установки. Rootless и RootHide — это **разные deb**, потому что RootHide при установке прогоняет бинарник через on-device patcher (переписывает rpath, пере-подписывает под arm64e/PAC), а обычные rootless-инсталлеры этого не делают.
+
 ### Вариант 1 — APT-репозиторий (RootHide Bootstrap / Sileo)
 
 Добавь репозиторий `https://ios.ratu.sh` и установи пакет `TGProxyRotation`:
 ```
 https://ios.ratu.sh
 ```
+RootHide Bootstrap сам определит, какой вариант нужен, и пропатчит бинарник при установке.
 
-### Вариант 2 — deb вручную (RootHide / rootless jailbreak)
+### Вариант 2 — deb вручную
 
-Скачать и установить через Sileo / Filza:
-- 📥 [com.ratush.tgproxyrotation_0.15.0_iphoneos-arm64e.deb](https://ios.ratu.sh/debs/com.ratush.tgproxyrotation_0.15.0_iphoneos-arm64e.deb)
+Выбери файл по своему джейлбрейку:
 
-> Один и тот же deb ставится и на **RootHide Bootstrap**, и на **rootless**-джейлбрейки. На RootHide on-device patcher видит sentinel `.roothidepatch` и пересобирает бинарник под arm64e/PAC; на rootless sentinel просто игнорируется.
+| Файл | Для |
+|---|---|
+| `*-rootless.deb` | **Rootless**-джейлбрейки: Dopamine, palera1n rootless, NathanLR, NekoJB |
+| `*-roothide.deb` | **RootHide Bootstrap** (с `.roothidepatch` sentinel и архитектурой `arm64e`) |
+
+Скачать из [последнего Release](https://github.com/chelaxian/TGProxyRotation/releases/latest) и установить через Sileo / Filza.
 
 ### Вариант 3 — sideload dylib (БЕЗ джейлбрейка)
 
