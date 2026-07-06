@@ -43,33 +43,156 @@ jobs:
           export THEOS="$HOME/theos"
           gmake clean package FINALPACKAGE=1
 
-      - name: Locate + repack rootless deb (rewrite paths to /var/jb/)
-        id: deb_rootless
+      - name: Repack rootless deb (rewrite paths to /var/jb/)
         run: |
           src="$(ls packages/com.ratush.tgproxyrotation_*_iphoneos-arm64.deb | head -1)"
           out="TGProxyRotation-${{ steps.ver.outputs.version }}-rootless.deb"
           # Theos default deb layout uses ./Library/... paths, but iOS rootless
           # dpkg (Dopamine, palera1n rootless) requires ./var/jb/Library/...
           # because the root filesystem is read-only and the jailbreak root
-          # is at /var/jb. Repack by prefixing all payload paths with /var/jb.
-          tmpdir="$(mktemp -d)"
-          dpkg-deb -R "$src" "$tmpdir"
-          # Move payload from ./Library/... to ./var/jb/Library/...
-          mkdir -p "$tmpdir/var/jb"
-          for item in "$tmpdir"/*; do
-            name="$(basename "$item")"
-            [ "$name" = "DEBIAN" ] && continue
-            [ "$name" = "var" ] && continue
-            mv "$item" "$tmpdir/var/jb/"
-          done
-          # Regenerate md5sums
-          (cd "$tmpdir" && find . -path ./DEBIAN -prune -o -type f -print0 | sort -z | \
-            while IFS= read -r -d '' f; do md5sum "$f" | sed 's#  \./#  #'; done > DEBIAN/md5sums)
-          dpkg-deb -Zgzip --root-owner-group -b "$tmpdir" "$out"
-          rm -rf "$tmpdir"
-          echo "path=$out" >> "$GITHUB_OUTPUT"
+          # is at /var/jb. macOS runners don't have dpkg-deb, so we repack
+          # using Python (same approach as the roothide variant below).
+          python3 - <<'PYEOF'
+          import os, io, gzip, lzma, tarfile, hashlib, time
+
+          src = os.environ['SRC']
+          out = os.environ['OUT']
+
+          def read_ar_members(path):
+              with open(path,'rb') as f:
+                  assert f.read(8) == b'!<arch>\n'
+                  members = []
+                  while True:
+                      hdr = f.read(60)
+                      if len(hdr) < 60: break
+                      name_field = hdr[:16].decode('ascii','replace').rstrip()
+                      size = int(hdr[48:58].strip())
+                      body = f.read(size)
+                      if size % 2: f.read(1)
+                      if name_field.startswith('#1/'):
+                          n = int(name_field[3:])
+                          real = body[:n].rstrip(b'\x00').decode('ascii')
+                          body = body[n:]
+                      elif name_field in ('//', '/'):
+                          continue
+                      elif name_field.startswith('/'):
+                          real = name_field
+                      else:
+                          real = name_field
+                      members.append((real, body))
+              return members
+
+          def decompress(blob, name):
+              if name.endswith('.lzma') or name.endswith('.xz'): return lzma.decompress(blob)
+              elif name.endswith('.gz'): return gzip.decompress(blob)
+              else: return blob
+
+          members = read_ar_members(src)
+          debian_bin = b'2.0\n'
+          control_blob = None
+          data_blob = None
+          data_name = None
+          for name, body in members:
+              if name == 'debian-binary':       debian_bin = body
+              elif name == 'control.tar.gz':    control_blob = body
+              elif name.startswith('data.tar.'):
+                  data_blob = body
+                  data_name = name
+          assert control_blob and data_blob
+
+          data_tar_bytes = decompress(data_blob, data_name)
+          control_tar_bytes = gzip.decompress(control_blob)
+
+          # Rewrite data.tar.gz: prefix every path with var/jb/
+          new_data_io = io.BytesIO()
+          md5_entries = []
+          with tarfile.open(fileobj=new_data_io, mode='w:gz') as tf:
+              src_tf = tarfile.open(fileobj=io.BytesIO(data_tar_bytes), mode='r:')
+              for m in src_tf.getmembers():
+                  # Skip the root '.' entry
+                  if m.name in ('.', './'):
+                      continue
+                  # Rewrite path: ./Library/... → ./var/jb/Library/...
+                  clean = m.name.lstrip('./')
+                  new_name = './var/jb/' + clean
+                  ti = tarfile.TarInfo(name=new_name)
+                  ti.type = m.type
+                  ti.mode = m.mode
+                  ti.mtime = 0
+                  ti.uid = ti.gid = 0
+                  ti.uname = ti.gname = ''
+                  if m.issym() or m.islnk():
+                      ti.linkname = m.linkname
+                  elif m.isfile():
+                      data = src_tf.extractfile(m).read()
+                      ti.size = len(data)
+                      # Track md5 for md5sums
+                      md5 = hashlib.md5(data).hexdigest()
+                      md5_entries.append((clean, md5))
+                      tf.addfile(ti, io.BytesIO(data))
+                  else:
+                      tf.addfile(ti)
+              src_tf.close()
+          new_data_io.seek(0)
+          new_data_gz = new_data_io.getvalue()
+
+          # Rebuild control.tar.gz with updated md5sums
+          ctrl_io = io.BytesIO()
+          with tarfile.open(fileobj=ctrl_io, mode='w:gz') as tf:
+              src_tf = tarfile.open(fileobj=io.BytesIO(control_tar_bytes), mode='r:')
+              for m in src_tf.getmembers():
+                  if m.isfile() and m.name.rstrip('/').endswith('control'):
+                      tf.addfile(m, src_tf.extractfile(m))
+                  elif m.isfile() and m.name.rstrip('/').endswith('md5sums'):
+                      # Replace with regenerated md5sums
+                      lines = []
+                      for path, md5 in md5_entries:
+                          lines.append(f'{md5}  var/jb/{path}')
+                      data = '\n'.join(lines) + '\n'
+                      ti = tarfile.TarInfo(name=m.name)
+                      ti.size = len(data.encode())
+                      ti.mode = 0o644; ti.mtime = 0; ti.uid = ti.gid = 0
+                      ti.uname = ti.gname = ''
+                      tf.addfile(ti, io.BytesIO(data.encode()))
+                  else:
+                      tf.addfile(m)
+              src_tf.close()
+          ctrl_io.seek(0)
+          new_control_gz = ctrl_io.getvalue()
+
+          # Assemble .deb (ar archive)
+          def ar_member(name, body):
+              name = name.ljust(16)[:16]
+              size = str(len(body)).ljust(10)[:10]
+              hdr = (name + '0'.ljust(12) + '0'.ljust(6) + '0'.ljust(6) +
+                     '100644'.ljust(8) + size + '`\n')
+              assert len(hdr) == 60
+              out = hdr.encode('ascii') + body
+              if len(body) % 2: out += b'\n'
+              return out
+
+          with open(out, 'wb') as f:
+              f.write(b'!<arch>\n')
+              f.write(ar_member('debian-binary', debian_bin))
+              f.write(ar_member('control.tar.gz', new_control_gz))
+              f.write(ar_member('data.tar.gz', new_data_gz))
+
+          sz = os.path.getsize(out)
+          print(f'>> rootless deb: {out} ({sz} bytes)')
+          # Verify
+          for n, b in read_ar_members(out):
+              print(f'    member {n}: {len(b)} bytes')
+          PYEOF
+        env:
+          SRC: ${{ github.workspace }}/packages/com.ratush.tgproxyrotation_${{ steps.ver.outputs.version }}_iphoneos-arm64.deb
+          OUT: ${{ github.workspace }}/TGProxyRotation-${{ steps.ver.outputs.version }}-rootless.deb
+
+      - name: Verify rootless deb + set output
+        id: deb_rootless
+        run: |
+          out="TGProxyRotation-${{ steps.ver.outputs.version }}-rootless.deb"
           echo ">> rootless deb: $out ($(wc -c < "$out") bytes)"
-          # Verify paths
+          echo "path=$out" >> "$GITHUB_OUTPUT"
           echo ">> data.tar contents:"
           ar x "$out" data.tar.gz && tar tzf data.tar.gz && rm -f data.tar.gz
 
