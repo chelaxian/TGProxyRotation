@@ -1,5 +1,7 @@
 # 🛡 TGProxyRotation
 
+🌐 **[Read in English](README_EN.md)**
+
 [![Build](https://github.com/chelaxian/TGProxyRotation/actions/workflows/build.yml/badge.svg?branch=main)](https://github.com/chelaxian/TGProxyRotation/actions/workflows/build.yml)
 [![Release](https://img.shields.io/github/v/release/chelaxian/TGProxyRotation?include_prereleases)](https://github.com/chelaxian/TGProxyRotation/releases/latest)
 [![License: GPL-3.0](https://img.shields.io/badge/License-GPL--3.0-blue.svg)](LICENSE)
