@@ -12,6 +12,7 @@
   <img alt="image1" src="https://github.com/user-attachments/assets/01f997ed-2756-428f-a665-92483884e94e" width="48%" />
   <img alt="image2" src="https://github.com/user-attachments/assets/df0857d0-241f-440b-adc7-fa7b97cc774e" width="48%" />
 </p>
+
 ---
 
 ## ✨ Что умеет
