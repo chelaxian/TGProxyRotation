@@ -11,8 +11,8 @@
 The tweak automatically switches between proxies you've already saved locally in Telegram or from a list loaded via a custom URL (external source) when the current proxy goes down. No more manually diving into settings and cycling through proxies — if one stops responding, the tweak switches to the next working one and shows a notification.
 
 <p align="center">
-  <img alt="image1" src="https://github.com/user-attachments/assets/01f997ed-2756-428f-a665-92483884e94e" width="48%" />
-  <img alt="image2" src="https://github.com/user-attachments/assets/df0857d0-241f-440b-adc7-fa7b97cc774e" width="48%" />
+  <img alt="image1" src="https://github.com/user-attachments/assets/08358583-6602-4475-ad79-bf0e37339784" width="48%" />
+  <img alt="image2" src="https://github.com/user-attachments/assets/70e00a1f-d398-4c6e-930f-23e2c945c21e" width="48%" />
 </p>
 
 ---
