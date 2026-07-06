@@ -88,17 +88,18 @@ RootHide Bootstrap сам определит, какой вариант нуже
 
 | Версия | rootless deb | roothide deb | sideload dylib |
 |---|---|---|---|
-| **0.15.0** | [TGProxyRotation-0.15.0-rootless.deb](https://github.com/chelaxian/TGProxyRotation/releases/download/v0.15.0/TGProxyRotation-0.15.0-rootless.deb) | [TGProxyRotation-0.15.0-roothide.deb](https://github.com/chelaxian/TGProxyRotation/releases/download/v0.15.0/TGProxyRotation-0.15.0-roothide.deb) | [TGProxyRotation-0.15.0.dylib](https://ios.ratu.sh/sideload/TGProxyRotation-0.15.0.dylib) |
-| **0.15.1** | [TGProxyRotation-0.15.1-rootless.deb](https://github.com/chelaxian/TGProxyRotation/releases/download/v0.15.1/TGProxyRotation-0.15.1-rootless.deb) | [TGProxyRotation-0.15.1-roothide.deb](https://github.com/chelaxian/TGProxyRotation/releases/download/v0.15.1/TGProxyRotation-0.15.1-roothide.deb) | [TGProxyRotation-0.15.1.dylib](https://ios.ratu.sh/sideload/TGProxyRotation-0.15.1.dylib) |
+| **1.0.0** | [rootless.deb](https://github.com/chelaxian/TGProxyRotation/releases/download/v1.0.0/TGProxyRotation-1.0.0-rootless.deb) | [roothide.deb](https://github.com/chelaxian/TGProxyRotation/releases/download/v1.0.0/TGProxyRotation-1.0.0-roothide.deb) | [dylib](https://github.com/chelaxian/TGProxyRotation/releases/download/v1.0.0/TGProxyRotation-1.0.0.dylib) |
+| **0.15.1** | [rootless.deb](https://github.com/chelaxian/TGProxyRotation/releases/download/v0.15.1/TGProxyRotation-0.15.1-rootless.deb) | [roothide.deb](https://github.com/chelaxian/TGProxyRotation/releases/download/v0.15.1/TGProxyRotation-0.15.1-roothide.deb) | [dylib](https://github.com/chelaxian/TGProxyRotation/releases/download/v0.15.1/TGProxyRotation-0.15.1.dylib) |
+| **0.15.0** | [rootless.deb](https://github.com/chelaxian/TGProxyRotation/releases/download/v0.15.0/TGProxyRotation-0.15.0-rootless.deb) | [roothide.deb](https://github.com/chelaxian/TGProxyRotation/releases/download/v0.15.0/TGProxyRotation-0.15.0-roothide.deb) | — |
 
 </details>
 
 ### Вариант 3 — sideload dylib (БЕЗ джейлбрейка)
 
 Для инъекции через **Sideloadly** или **TrollFools** в IPA Telegram:
-- 📥 [TGProxyRotation-1.0.0.dylib](https://ios.ratu.sh/sideload/TGProxyRotation-1.0.0.dylib)
-- 🕓 [TGProxyRotation-0.15.0.dylib](https://ios.ratu.sh/sideload/TGProxyRotation-0.15.0.dylib) (старая)
-- 🕓 [TGProxyRotation-0.15.1.dylib](https://ios.ratu.sh/sideload/TGProxyRotation-0.15.1.dylib) (старая)
+- 📥 [TGProxyRotation-1.0.2.dylib](https://github.com/chelaxian/TGProxyRotation/releases/download/v1.0.2/TGProxyRotation-1.0.2.dylib)
+- 🕓 [TGProxyRotation-1.0.0.dylib](https://github.com/chelaxian/TGProxyRotation/releases/download/v1.0.0/TGProxyRotation-1.0.0.dylib) (старая)
+- 🕓 [TGProxyRotation-0.15.1.dylib](https://github.com/chelaxian/TGProxyRotation/releases/download/v0.15.1/TGProxyRotation-0.15.1.dylib) (старая)
 
 ---
 
