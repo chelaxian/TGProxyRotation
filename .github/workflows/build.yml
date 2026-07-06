@@ -43,12 +43,21 @@ jobs:
           export THEOS="$HOME/theos"
           gmake clean package FINALPACKAGE=1
 
-      - name: Locate + rename rootless deb
+      - name: Locate + repack rootless deb (fix ./ prefix)
         id: deb_rootless
         run: |
           src="$(ls packages/com.ratush.tgproxyrotation_*_iphoneos-arm64.deb | head -1)"
           out="TGProxyRotation-${{ steps.ver.outputs.version }}-rootless.deb"
-          cp "$src" "$out"
+          # Theos on macOS builds data.tar paths WITHOUT ./ prefix, which
+          # causes dpkg on rootless jailbreaks (Dopamine) to try creating
+          # /Library/... at the read-only root FS. Repack with dpkg-deb to
+          # ensure proper ./ prefixed paths.
+          tmpdir="$(mktemp -d)"
+          dpkg-deb -R "$src" "$tmpdir"
+          (cd "$tmpdir" && find . -path ./DEBIAN -prune -o -type f -print0 | sort -z | \
+            while IFS= read -r -d '' f; do md5sum "$f" | sed 's#  \./#  #'; done > DEBIAN/md5sums)
+          dpkg-deb -Zgzip --root-owner-group -b "$tmpdir" "$out"
+          rm -rf "$tmpdir"
           echo "path=$out" >> "$GITHUB_OUTPUT"
           echo ">> rootless deb: $out ($(wc -c < "$out") bytes)"
 
