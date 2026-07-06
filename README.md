@@ -6,7 +6,7 @@
 
 **Автоматическая ротация прокси для Telegram на iOS** — функция, которая есть на Android, PC и Mac, но которой почему-то нет на iOS.
 
-Твик сам переключает прокси из тех, что уже сохранены у тебя в Telegram, когда текущий отваливается. Больше не нужно вручную лезть в настройки и перебирать прокси — если один перестал отвечать, твик молча переключится на следующий рабочий.
+Твик сам переключает прокси из тех, что уже сохранены локально в Telegram или из списка по указанной ссылке (внешний источник), когда текущий прокси отваливается. Больше не нужно вручную лезть в настройки и перебирать прокси — если один перестал отвечать, твик переключится на следующий рабочий и покажет уведомление.
 
 <p align="center">
   <img alt="image1" src="https://github.com/user-attachments/assets/01f997ed-2756-428f-a665-92483884e94e" width="48%" />
@@ -23,7 +23,7 @@
 - 🌐 **Внешний список прокси по ссылке** (свой URL, `txt`: по одному `tg://proxy` или `https://t.me/proxy` на строку) — список кэшируется и подтягивается мгновенно при запуске
 - ✅ Показывает **активный прокси, пинг и обратный отсчёт** до переключения
 - ℹ️ **Долгий тап по иконке ⓘ** (в середине верхней границы окна) — скрытие/показ текста подсказок для визуальной очистки интерфейса
-- 🇷🇺🇬🇧 Интерфейс **на русском и английском**
+- **RU/EN** Интерфейс **на русском и английском**
 - 🚫 Кнопка **полного отключения прокси** (прямое соединение)
 
 ## 📱 Поддерживаемые клиенты
@@ -54,7 +54,7 @@
 3. Выбери интервал (10–15 сек — оптимально)
 4. Хочешь готовый список прокси из интернета — включи **«Внешний список прокси»**; долгий тап по этой галчке позволяет задать свой URL
 5. Стрелки ← → переключают прокси вручную; долгий тап по стрелке — случайный выбор
-6. Кнопка **«−»** сворачивает окно в щит, **«×»** закрывает
+6. Кнопка **«−»** сворачивает окно в щит, **«×»** закрывает, **«ⓘ»** скрывает подсказки
 
 > ⚠️ **Важно:** твик **не двигает галочку** в родном списке прокси Telegram — переключение происходит «под капотом» (не получилось иначе реализовать). Какой прокси активен сейчас — всегда видно в окне твика. В штатных настройках «Прокси» в Telegram визуально активным остаётся тот прокси, который был выставлен до твика.
 
@@ -62,15 +62,15 @@
 
 ## 📦 Установка
 
-> ⚠️ Скачивай тот файл, который соответствует твоему способу установки. Rootless и RootHide — это **разные deb**, потому что RootHide при установке прогоняет бинарник через on-device patcher (переписывает rpath, пере-подписывает под arm64e/PAC), а обычные rootless-инсталлеры этого не делают.
+> ⚠️ Скачивай тот файл, который соответствует твоему способу установки. Rootless и RootHide — это **разные deb**, для разных типов архитектуры jailbreak (arm64/arm64e). RootHide при установке прогоняет бинарник через on-device patcher (переписывает rpath, пере-подписывает под arm64e/PAC), а обычные rootless-инсталлеры этого не делают.
 
-### Вариант 1 — APT-репозиторий (RootHide Bootstrap / Sileo)
+### Вариант 1 — APT-репозиторий (Sileo)
 
 Добавь репозиторий `https://ios.ratu.sh` и установи пакет `TGProxyRotation`:
 ```
 https://ios.ratu.sh
 ```
-RootHide Bootstrap сам определит, какой вариант нужен, и пропатчит бинарник при установке.
+Sileo сам определит, какой вариант нужен.
 
 ### Вариант 2 — deb вручную
 
@@ -79,18 +79,16 @@ RootHide Bootstrap сам определит, какой вариант нуже
 | Файл | Для |
 |---|---|
 | `*-rootless.deb` | **Rootless**-джейлбрейки: Dopamine, palera1n rootless, NathanLR, NekoJB |
-| `*-roothide.deb` | **RootHide Bootstrap** (с `.roothidepatch` sentinel и архитектурой `arm64e`) |
+| `*-roothide.deb` | **RootHide Bootstrap** / **RootHide Dopamine** (с `.roothidepatch` sentinel и архитектурой `arm64e`) |
 
 Скачать из [последнего Release](https://github.com/chelaxian/TGProxyRotation/releases/latest) и установить через Sileo / Filza.
 
 <details>
-<summary>📦 Старые версии (для отката)</summary>
+<summary>📦 Прямые ссылки</summary>
 
 | Версия | rootless deb | roothide deb | sideload dylib |
 |---|---|---|---|
-| **1.0.0** | [rootless.deb](https://github.com/chelaxian/TGProxyRotation/releases/download/v1.0.0/TGProxyRotation-1.0.0-rootless.deb) | [roothide.deb](https://github.com/chelaxian/TGProxyRotation/releases/download/v1.0.0/TGProxyRotation-1.0.0-roothide.deb) | [dylib](https://github.com/chelaxian/TGProxyRotation/releases/download/v1.0.0/TGProxyRotation-1.0.0.dylib) |
-| **0.15.1** | [rootless.deb](https://github.com/chelaxian/TGProxyRotation/releases/download/v0.15.1/TGProxyRotation-0.15.1-rootless.deb) | [roothide.deb](https://github.com/chelaxian/TGProxyRotation/releases/download/v0.15.1/TGProxyRotation-0.15.1-roothide.deb) | [dylib](https://github.com/chelaxian/TGProxyRotation/releases/download/v0.15.1/TGProxyRotation-0.15.1.dylib) |
-| **0.15.0** | [rootless.deb](https://github.com/chelaxian/TGProxyRotation/releases/download/v0.15.0/TGProxyRotation-0.15.0-rootless.deb) | [roothide.deb](https://github.com/chelaxian/TGProxyRotation/releases/download/v0.15.0/TGProxyRotation-0.15.0-roothide.deb) | — |
+| **1.0.2** | [rootless.deb](https://github.com/chelaxian/TGProxyRotation/releases/download/v1.0.2/TGProxyRotation-1.0.2-rootless.deb) | [roothide.deb](https://github.com/chelaxian/TGProxyRotation/releases/download/v1.0.2/TGProxyRotation-1.0.2-roothide.deb) | [dylib](https://github.com/chelaxian/TGProxyRotation/releases/download/v1.0.2/TGProxyRotation-1.0.2.dylib) |
 
 </details>
 
@@ -98,8 +96,6 @@ RootHide Bootstrap сам определит, какой вариант нуже
 
 Для инъекции через **Sideloadly** или **TrollFools** в IPA Telegram:
 - 📥 [TGProxyRotation-1.0.2.dylib](https://github.com/chelaxian/TGProxyRotation/releases/download/v1.0.2/TGProxyRotation-1.0.2.dylib)
-- 🕓 [TGProxyRotation-1.0.0.dylib](https://github.com/chelaxian/TGProxyRotation/releases/download/v1.0.0/TGProxyRotation-1.0.0.dylib) (старая)
-- 🕓 [TGProxyRotation-0.15.1.dylib](https://github.com/chelaxian/TGProxyRotation/releases/download/v0.15.1/TGProxyRotation-0.15.1.dylib) (старая)
 
 ---
 
