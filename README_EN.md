@@ -8,11 +8,11 @@
 
 **Automatic proxy rotation for Telegram on iOS** — a feature that exists on Android, PC, and Mac, but for some reason is missing on iOS.
 
-The tweak automatically switches between proxies you've already saved in Telegram when the current one goes down. No more manually diving into settings and cycling through proxies — if one stops responding, the tweak silently switches to the next working one.
+The tweak automatically switches between proxies you've already saved locally in Telegram or from a list loaded via a custom URL (external source) when the current proxy goes down. No more manually diving into settings and cycling through proxies — if one stops responding, the tweak switches to the next working one and shows a notification.
 
 <p align="center">
   <img alt="image1" src="https://github.com/user-attachments/assets/01f997ed-2756-428f-a665-92483884e94e" width="48%" />
-  <img alt="image2" src="https://github.com/user-attachments/assets/95b23863-f7b5-41f1-b0a0-6885f346b722" width="48%" />
+  <img alt="image2" src="https://github.com/user-attachments/assets/df0857d0-241f-440b-adc7-fa7b97cc774e" width="48%" />
 </p>
 
 ---
@@ -26,7 +26,7 @@ The tweak automatically switches between proxies you've already saved in Telegra
 - 🌐 **External proxy list via URL** (your own URL, `txt`: one `tg://proxy` or `https://t.me/proxy` per line) — the list is cached and loaded instantly on launch
 - ✅ Shows **active proxy, ping, and countdown** to next switch
 - ℹ️ **Long press the ⓘ icon** (at the top center of the tweak window) — toggle hint labels on/off for a cleaner interface
-- 🇷🇺🇬🇧 UI in **Russian and English**
+- **RU/EN** UI in **Russian and English**
 - 🚫 **Disable proxy** button (direct connection)
 
 ## 📱 Supported Clients
@@ -57,7 +57,7 @@ While in Telegram, use any of these methods:
 3. Choose an interval (10–15 sec is optimal)
 4. Want a ready-made proxy list from the internet? Enable **"External proxy list"**; long press that toggle to set your own URL
 5. The ← → arrows switch proxies manually; long press an arrow for a random pick
-6. The **"−"** button minimizes the window into a shield, **"×"** closes it
+6. The **"−"** button minimizes the window into a shield, **"×"** closes it, **"ⓘ"** hides hints
 
 > ⚠️ **Important:** the tweak **does not move the checkmark** in Telegram's native proxy list — switching happens under the hood (this was the only way to implement it reliably). Which proxy is currently active is always visible in the tweak window. In Telegram's built-in "Proxy" settings, the visually active proxy remains whatever was set before the tweak took over.
 
@@ -65,15 +65,15 @@ While in Telegram, use any of these methods:
 
 ## 📦 Installation
 
-> ⚠️ Download the file that matches your installation method. Rootless and RootHide are **different deb files**, because RootHide runs the binary through an on-device patcher at install time (rewrites rpath, re-signs for arm64e/PAC), while regular rootless installers don't.
+> ⚠️ Download the file that matches your installation method. Rootless and RootHide are **different deb files**, for different jailbreak architecture types (arm64/arm64e). RootHide runs the binary through an on-device patcher at install time (rewrites rpath, re-signs for arm64e/PAC), while regular rootless installers don't.
 
-### Option 1 — APT Repository (RootHide Bootstrap / Sileo)
+### Option 1 — APT Repository (Sileo)
 
 Add the repository `https://ios.ratu.sh` and install the `TGProxyRotation` package:
 ```
 https://ios.ratu.sh
 ```
-RootHide Bootstrap will automatically determine which variant is needed and patch the binary during installation.
+Sileo will automatically determine which variant is needed.
 
 ### Option 2 — Manual deb
 
@@ -82,18 +82,16 @@ Pick the file for your jailbreak:
 | File | For |
 |---|---|
 | `*-rootless.deb` | **Rootless** jailbreaks: Dopamine, palera1n rootless, NathanLR, NekoJB |
-| `*-roothide.deb` | **RootHide Bootstrap** (includes `.roothidepatch` sentinel and `arm64e` architecture) |
+| `*-roothide.deb` | **RootHide Bootstrap** / **RootHide Dopamine** (includes `.roothidepatch` sentinel and `arm64e` architecture) |
 
 Download from the [latest Release](https://github.com/chelaxian/TGProxyRotation/releases/latest) and install via Sileo / Filza.
 
 <details>
-<summary>📦 Older versions (for rollback)</summary>
+<summary>📦 Direct links</summary>
 
 | Version | rootless deb | roothide deb | sideload dylib |
 |---|---|---|---|
-| **1.0.0** | [rootless.deb](https://github.com/chelaxian/TGProxyRotation/releases/download/v1.0.0/TGProxyRotation-1.0.0-rootless.deb) | [roothide.deb](https://github.com/chelaxian/TGProxyRotation/releases/download/v1.0.0/TGProxyRotation-1.0.0-roothide.deb) | [dylib](https://github.com/chelaxian/TGProxyRotation/releases/download/v1.0.0/TGProxyRotation-1.0.0.dylib) |
-| **0.15.1** | [rootless.deb](https://github.com/chelaxian/TGProxyRotation/releases/download/v0.15.1/TGProxyRotation-0.15.1-rootless.deb) | [roothide.deb](https://github.com/chelaxian/TGProxyRotation/releases/download/v0.15.1/TGProxyRotation-0.15.1-roothide.deb) | [dylib](https://github.com/chelaxian/TGProxyRotation/releases/download/v0.15.1/TGProxyRotation-0.15.1.dylib) |
-| **0.15.0** | [rootless.deb](https://github.com/chelaxian/TGProxyRotation/releases/download/v0.15.0/TGProxyRotation-0.15.0-rootless.deb) | [roothide.deb](https://github.com/chelaxian/TGProxyRotation/releases/download/v0.15.0/TGProxyRotation-0.15.0-roothide.deb) | — |
+| **1.0.2** | [rootless.deb](https://github.com/chelaxian/TGProxyRotation/releases/download/v1.0.2/TGProxyRotation-1.0.2-rootless.deb) | [roothide.deb](https://github.com/chelaxian/TGProxyRotation/releases/download/v1.0.2/TGProxyRotation-1.0.2-roothide.deb) | [dylib](https://github.com/chelaxian/TGProxyRotation/releases/download/v1.0.2/TGProxyRotation-1.0.2.dylib) |
 
 </details>
 
@@ -101,8 +99,6 @@ Download from the [latest Release](https://github.com/chelaxian/TGProxyRotation/
 
 For injection via **Sideloadly** or **TrollFools** into the Telegram IPA:
 - 📥 [TGProxyRotation-1.0.2.dylib](https://github.com/chelaxian/TGProxyRotation/releases/download/v1.0.2/TGProxyRotation-1.0.2.dylib)
-- 🕓 [TGProxyRotation-1.0.0.dylib](https://github.com/chelaxian/TGProxyRotation/releases/download/v1.0.0/TGProxyRotation-1.0.0.dylib) (old)
-- 🕓 [TGProxyRotation-0.15.1.dylib](https://github.com/chelaxian/TGProxyRotation/releases/download/v0.15.1/TGProxyRotation-0.15.1.dylib) (old)
 
 ---
 
